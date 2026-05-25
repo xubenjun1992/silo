@@ -1,0 +1,10 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "RiskCalc",
+  "sourceName": "src/libraries/RiskCalc.sol",
+  "abi": [],
+  "bytecode": "0x6080806040523460175760399081601c823930815050f35b5f80fdfe5f80fdfea26469706673582212203f1d673190968c9d7692941f357ae4b4a92f6dc56594620bc3a2859e19dec7d764736f6c63430008180033",
+  "deployedBytecode": "0x5f80fdfea26469706673582212203f1d673190968c9d7692941f357ae4b4a92f6dc56594620bc3a2859e19dec7d764736f6c63430008180033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
