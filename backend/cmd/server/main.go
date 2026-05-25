@@ -71,7 +71,7 @@ func main() {
 	if len(cfg.PriceFeedAddrs) == 0 {
 		log.Warn().Msg("PRICE_FEED_ADDRS is empty — oracle prices will not be available")
 	}
-	feeder := liquidation.NewOraclePriceFeeder(cfg.HttpRpcUrl, cfg.PriceFeedAddrs)
+	feeder := liquidation.NewOraclePriceFeeder(cfg.HttpRpcUrls, cfg.PriceFeedAddrs)
 
 	// onEventConfirmed: called by consumer after safe-block DB insert.
 	// Updates Redis position cache with oracle prices, timestamps, and pool risk params.

@@ -11,8 +11,9 @@ import (
 type Config struct {
 	ServerAddr  string `mapstructure:"SERVER_ADDR"`
 	DBDsn       string `mapstructure:"DB_DSN"`
-	HttpRpcUrl  string `mapstructure:"HTTP_RPC_URL"`
-	WsRpcUrl    string `mapstructure:"WS_RPC_URL"`
+	HttpRpcUrls []string `mapstructure:"HTTP_RPC_URLS"`
+	HttpRpcUrl  string   // derived: first element of HttpRpcUrls, for single-URL consumers
+	WsRpcUrl    string   `mapstructure:"WS_RPC_URL"`
 	PoolFactory string `mapstructure:"POOL_FACTORY_ADDRESS"`
 	StartBlock  uint64 `mapstructure:"START_BLOCK"`
 
@@ -113,6 +114,16 @@ func Load() (*Config, error) {
 		if err := json.Unmarshal([]byte(raw), &cfg.PriceFeedAddrs); err != nil {
 			return nil, fmt.Errorf("failed to parse PRICE_FEED_ADDRS JSON: %w", err)
 		}
+	}
+
+	// Backward compat: HTTP_RPC_URL (single) → HTTP_RPC_URLS (comma-separated list)
+	if len(cfg.HttpRpcUrls) == 0 {
+		if single := viper.GetString("HTTP_RPC_URL"); single != "" {
+			cfg.HttpRpcUrls = []string{single}
+		}
+	}
+	if len(cfg.HttpRpcUrls) > 0 {
+		cfg.HttpRpcUrl = cfg.HttpRpcUrls[0]
 	}
 
 	return cfg, nil
