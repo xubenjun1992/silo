@@ -45,8 +45,9 @@ type Config struct {
 	NormalMaxLiqPerBatch int           `mapstructure:"LIQ_NORMAL_MAX_BATCH"`
 	ScanInterval         time.Duration `mapstructure:"LIQ_SCAN_INTERVAL"`
 
-	// Chainlink price feed aggregator addresses: tokenAddr → aggregatorAddr
-	PriceFeedAddrs map[string]string `mapstructure:"PRICE_FEED_ADDRS"`
+	// Price feed aggregator addresses: tokenAddr → [aggregatorAddr, ...]
+	// Supports both old format {"token":"addr"} and new format {"token":["addr1","addr2"]}
+	PriceFeedAddrs map[string][]string `mapstructure:"PRICE_FEED_ADDRS"`
 
 	// Liquidation executor
 	ExecutorKey string `mapstructure:"LIQ_EXECUTOR_KEY"`
@@ -108,11 +109,19 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	// PRICE_FEED_ADDRS is a JSON map: {"0xtoken":"0xaggregator",...}
+	// PRICE_FEED_ADDRS: new format {"token":["agg1","agg2"]}, old format {"token":"agg"} also accepted
 	if raw := viper.GetString("PRICE_FEED_ADDRS"); raw != "" {
-		cfg.PriceFeedAddrs = make(map[string]string)
+		cfg.PriceFeedAddrs = make(map[string][]string)
 		if err := json.Unmarshal([]byte(raw), &cfg.PriceFeedAddrs); err != nil {
-			return nil, fmt.Errorf("failed to parse PRICE_FEED_ADDRS JSON: %w", err)
+			// Try old format: map[string]string → convert to map[string][]string
+			var oldFormat map[string]string
+			if err2 := json.Unmarshal([]byte(raw), &oldFormat); err2 != nil {
+				return nil, fmt.Errorf("failed to parse PRICE_FEED_ADDRS JSON: %w", err)
+			}
+			cfg.PriceFeedAddrs = make(map[string][]string, len(oldFormat))
+			for token, addr := range oldFormat {
+				cfg.PriceFeedAddrs[token] = []string{addr}
+			}
 		}
 	}
 
