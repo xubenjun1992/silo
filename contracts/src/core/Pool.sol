@@ -42,7 +42,6 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
 
     /*═══════════════════════════════════ STATE ═══════════════════════════════════════*/
     uint256 public totalLiquidity;
-    uint256 public totalDebt;
     uint256 public totalDebtShares;
     uint256 public lastUpdateTime;
     uint256 public borrowIndex = 1e18;      // accrual tracker, scaled per second
@@ -112,14 +111,12 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
     function borrow(uint256 amount, address to) external nonReentrant accrue {
         require(amount <= totalLiquidity, "Insufficient liquidity");
 
-        _updateDebt(msg.sender);
-        uint256 newDebt = _debtOf(msg.sender) + amount;
+        uint256 newDebt = (debtShares[msg.sender] * borrowIndex) / 1e18 + amount;
         require(_healthFactorAfter(msg.sender, newDebt) >= 1e18, "Undercollateralized");
 
         uint256 newShares = (amount * 1e18) / borrowIndex;
         debtShares[msg.sender] += newShares;
         totalDebtShares += newShares;
-        totalDebt += amount;
         totalLiquidity -= amount;
 
         IERC20(depositAsset).safeTransfer(to, amount);
@@ -129,8 +126,7 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
     function repay(uint256 amount, address onBehalfOf)
         external nonReentrant accrue returns (uint256 repaid)
     {
-        _updateDebt(onBehalfOf);
-        uint256 owed = _debtOf(onBehalfOf);
+        uint256 owed = (debtShares[onBehalfOf] * borrowIndex) / 1e18;
         repaid = amount > owed ? owed : amount;
         require(repaid > 0, "Repay=0");
 
@@ -141,7 +137,6 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
             debtShares[msg.sender] -= sharesToBurn;
         }
         totalDebtShares -= sharesToBurn;
-        totalDebt -= repaid;
 
         IERC20(depositAsset).safeTransferFrom(msg.sender, address(this), repaid);
         totalLiquidity += repaid;
@@ -170,11 +165,11 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
             collateralSeized = collateral[borrower];
         }
 
+        uint256 sharesToBurn = debtShares[borrower];
         collateral[borrower] -= collateralSeized;
         debtShares[borrower] = 0;
-        totalDebtShares -= (debtToRepay * 1e18) / borrowIndex;
-        totalDebt -= debtToRepay;
-
+        totalDebtShares -= sharesToBurn;
+        debtRepaid = debtToRepay;
         IERC20(depositAsset).safeTransferFrom(msg.sender, address(this), debtRepaid);
         IERC20(collateralAsset).safeTransfer(msg.sender, collateralSeized);
 
@@ -183,8 +178,13 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
     }
 
     /*═══════════════════════════════════ VIEWS ════════════════════════════════════════*/
+    /// @notice Total outstanding debt, derived from shares and borrow index (Aave-style).
+    function totalDebt() public view returns (uint256) {
+        return (totalDebtShares * borrowIndex) / 1e18;
+    }
+
     function getUtilizationRate() public view returns (uint256) {
-        return rateModel.utilizationRate(totalLiquidity, totalDebt);
+        return rateModel.utilizationRate(totalLiquidity, totalDebt());
     }
 
     function getBorrowRate() public view returns (uint256) {
@@ -226,11 +226,6 @@ contract Pool is IPool, AccessControl, ReentrancyGuard, Pausable {
         uint256 supplyAccrual = (supplyRate * elapsed) / 365 days;
         uint256 newExchangeRate = rToken.exchangeRate() + (rToken.exchangeRate() * supplyAccrual) / 1e18;
         rToken.setExchangeRate(newExchangeRate); // simplified; would need perms
-    }
-
-    function _updateDebt(address borrower) internal {
-        uint256 currentDebt = _debtOf(borrower);
-        totalDebt = totalDebt - currentDebt + (debtShares[borrower] * borrowIndex) / 1e18;
     }
 
     function _debtOf(address borrower) internal view returns (uint256) {
